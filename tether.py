@@ -11,65 +11,64 @@ from pathlib import Path
 def get_tether_gateway():
     """Get the gateway IP for Android tether interfaces"""
     
+    # Get ipconfig output once for all checks
+    try:
+        result = subprocess.run(['ipconfig.exe', '/all'], capture_output=True, text=True, check=True)
+        ipconfig_lines = result.stdout.split('\n')
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("Failed to run ipconfig.exe")
+        return None
+    
     # Priority order: USB > WiFi > Bluetooth
     
     # First check for USB tether
-    try:
-        result = subprocess.run(['ipconfig', '/all'], capture_output=True, text=True, check=True)
-        output = result.stdout
-        lines = output.split('\n')
-        
-        for i, line in enumerate(lines):
-            if 'UsbNcm Host Device' in line:
-                # Found USB device, look for Default Gateway in next 20 lines
-                for j in range(i, min(i+20, len(lines))):
-                    if 'Default Gateway' in lines[j]:
-                        # Check if IPv4 gateway is on this line
-                        gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j])
+    for i, line in enumerate(ipconfig_lines):
+        if 'UsbNcm Host Device' in line:
+            # Found USB device, look for Default Gateway in next 20 lines
+            for j in range(i, min(i+20, len(ipconfig_lines))):
+                if 'Default Gateway' in ipconfig_lines[j]:
+                    # Check if IPv4 gateway is on this line
+                    gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j])
+                    if gw_match:
+                        return gw_match.group(1)
+                    # Check next line for IPv4 gateway
+                    elif j+1 < len(ipconfig_lines) and '.' in ipconfig_lines[j+1] and ':' not in ipconfig_lines[j+1]:
+                        gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j+1])
                         if gw_match:
                             return gw_match.group(1)
-                        # Check next line for IPv4 gateway
-                        elif j+1 < len(lines) and '.' in lines[j+1] and ':' not in lines[j+1]:
-                            gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j+1])
-                            if gw_match:
-                                return gw_match.group(1)
-                break
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+            break
     
-    # Then check for WiFi tether using netsh (higher priority than Bluetooth)
+    # Then check for WiFi tether using netsh.exe (higher priority than Bluetooth)
     try:
-        result = subprocess.run(['netsh', 'wlan', 'show', 'interfaces'], 
+        result = subprocess.run(['netsh.exe', 'wlan', 'show', 'interfaces'], 
                               capture_output=True, text=True, check=True)
         output = result.stdout
         
         # Check if connected to Lee Pixel 8a
         if 'SSID                   : Lee Pixel 8a' in output and 'State                  : connected' in output:
-            # WiFi tether is active, now get the gateway from ipconfig
-            result = subprocess.run(['ipconfig', '/all'], capture_output=True, text=True, check=True)
-            lines = result.stdout.split('\n')
+            # WiFi tether is active, use the already captured ipconfig output
             
             # Find the WiFi adapter (the one that's actually connected, not disconnected)
-            for i, line in enumerate(lines):
-                if 'Wireless LAN adapter Wi-Fi:' in line and i+1 < len(lines):
+            for i, line in enumerate(ipconfig_lines):
+                if 'Wireless LAN adapter Wi-Fi:' in line and i+1 < len(ipconfig_lines):
                     # Check if this adapter is connected (has IPv4 address)
                     adapter_connected = False
-                    for j in range(i+1, min(i+15, len(lines))):
-                        if 'IPv4 Address' in lines[j] and '.' in lines[j]:
+                    for j in range(i+1, min(i+15, len(ipconfig_lines))):
+                        if 'IPv4 Address' in ipconfig_lines[j] and '.' in ipconfig_lines[j]:
                             adapter_connected = True
                             break
-                        if 'adapter' in lines[j].lower() and j > i+1:
+                        if 'adapter' in ipconfig_lines[j].lower() and j > i+1:
                             break
                     
                     if adapter_connected:
                         # Found connected WiFi adapter, look for Default Gateway
-                        for j in range(i, min(i+25, len(lines))):
-                            if 'Default Gateway' in lines[j]:
-                                gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j])
+                        for j in range(i, min(i+25, len(ipconfig_lines))):
+                            if 'Default Gateway' in ipconfig_lines[j]:
+                                gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j])
                                 if gw_match:
                                     return gw_match.group(1)
-                                elif j+1 < len(lines) and '.' in lines[j+1] and ':' not in lines[j+1]:
-                                    gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j+1])
+                                elif j+1 < len(ipconfig_lines) and '.' in ipconfig_lines[j+1] and ':' not in ipconfig_lines[j+1]:
+                                    gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j+1])
                                     if gw_match:
                                         return gw_match.group(1)
                         break
@@ -77,26 +76,19 @@ def get_tether_gateway():
         pass
     
     # Finally check for Bluetooth tether (lowest priority)
-    try:
-        result = subprocess.run(['ipconfig', '/all'], capture_output=True, text=True, check=True)
-        output = result.stdout
-        lines = output.split('\n')
-        
-        for i, line in enumerate(lines):
-            if 'Bluetooth Network Connection' in line:
-                # Found Bluetooth adapter, look for Default Gateway
-                for j in range(i, min(i+20, len(lines))):
-                    if 'Default Gateway' in lines[j]:
-                        gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j])
+    for i, line in enumerate(ipconfig_lines):
+        if 'Bluetooth Network Connection' in line:
+            # Found Bluetooth adapter, look for Default Gateway
+            for j in range(i, min(i+20, len(ipconfig_lines))):
+                if 'Default Gateway' in ipconfig_lines[j]:
+                    gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j])
+                    if gw_match:
+                        return gw_match.group(1)
+                    elif j+1 < len(ipconfig_lines) and '.' in ipconfig_lines[j+1] and ':' not in ipconfig_lines[j+1]:
+                        gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', ipconfig_lines[j+1])
                         if gw_match:
                             return gw_match.group(1)
-                        elif j+1 < len(lines) and '.' in lines[j+1] and ':' not in lines[j+1]:
-                            gw_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', lines[j+1])
-                            if gw_match:
-                                return gw_match.group(1)
-                break
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+            break
     
     return None
 
