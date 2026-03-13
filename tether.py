@@ -140,7 +140,7 @@ def update_ssh_config(gateway_ip):
         print(f"Error updating SSH config: {e}")
         return False
 
-def update_known_hosts(gateway_ip):
+def update_known_hosts():
     """Clean old phone entries"""
     known_hosts = Path.home() / '.ssh' / 'known_hosts'
     
@@ -173,7 +173,7 @@ def main():
     if not update_ssh_config(gateway):
         sys.exit(1)
     
-    if not update_known_hosts(gateway):
+    if not update_known_hosts():
         sys.exit(1)
     
     print("Tether configuration updated successfully")
