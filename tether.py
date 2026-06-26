@@ -108,33 +108,52 @@ def update_ssh_config(gateway_ip):
         # Find the Host phone section and update it
         new_lines = []
         i = 0
+        phone_section_found = False
+        hostname_updated = False
+        
         while i < len(lines):
             line = lines[i]
             
-            # Look for "Host phone"
-            if line.strip() == 'Host phone':
+            # Look for "Host phone" (case-insensitive keyword, case-sensitive argument)
+            if line.strip().lower().startswith('host ') and line.strip().endswith(' phone'):
+                phone_section_found = True
                 new_lines.append(line)
-                # Check next lines for Hostname
                 i += 1
+                # Process lines in the Host phone section
                 while i < len(lines):
                     next_line = lines[i]
-                    if next_line.strip().startswith('Hostname'):
-                        # Replace the Hostname line
-                        new_lines.append(f'  Hostname {gateway_ip}\n')
-                        i += 1
+                    # Stop when we hit the next Host section or end of file
+                    if (next_line.strip().lower().startswith('host ') and 
+                        not next_line.strip().lower().endswith(' phone')):
                         break
+                    if next_line.strip().lower().startswith('hostname'):
+                        # Replace the Hostname line (use correct case 'Hostname')
+                        new_lines.append(f'  Hostname {gateway_ip}\n')
+                        hostname_updated = True
+                        print(f"Updated phone HostName to {gateway_ip} in {ssh_config} line {i+1}")
+                        i += 1
                     else:
                         new_lines.append(next_line)
                         i += 1
+                # If no Hostname was found in the section, add one
+                if not hostname_updated:
+                    new_lines.append(f'  Hostname {gateway_ip}\n')
+                    print(f"Added phone HostName {gateway_ip} in {ssh_config}")
             else:
                 new_lines.append(line)
                 i += 1
+        
+        # If no Host phone section was found, add one
+        if not phone_section_found:
+            new_lines.append('\n')
+            new_lines.append('Host phone\n')
+            new_lines.append(f'  Hostname {gateway_ip}\n')
+            print(f"Added phone Host section with HostName {gateway_ip} in {ssh_config}")
         
         # Write back with Windows line endings
         with open(ssh_config, 'w', newline='\n') as f:
             f.writelines(new_lines)
         
-        print(f"Updated phone HostName to {gateway_ip}")
         return True
     except Exception as e:
         print(f"Error updating SSH config: {e}")
