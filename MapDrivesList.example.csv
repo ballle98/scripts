@@ -1,0 +1,4 @@
+DriveLetter,RemotePath
+L,\\192.168.0.8\sda2
+M,\\192.168.0.5\sda1
+P,\\192.168.0.95\pictures
